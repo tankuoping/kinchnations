@@ -43,7 +43,7 @@ def gender_bucket(g):
 def download_export(dest):
     req = urllib.request.Request(
         EXPORT_URL,
-        headers={"User-Agent": "KinchNation/1.0 (github.com/tankuoping/kinch-nation)"},
+        headers={"User-Agent": "KinchNation/1.0 (github.com/tankuoping/kinchnations)"},
     )
     final_url = EXPORT_URL
     with urllib.request.urlopen(req, timeout=600) as resp:
@@ -78,6 +78,20 @@ def main():
 
     zf = zipfile.ZipFile(tmp.name)
     names = {n.lower(): n for n in zf.namelist()}
+
+    # Versioned export name lives inside the zip's README, not in the URL
+    import re
+    for low, orig in names.items():
+        if "readme" in low or "metadata" in low:
+            try:
+                text = zf.read(orig).decode("utf-8", "replace")
+                m = re.search(r"WCA_export\d+_\d+\w*", text)
+                if m:
+                    export_name = m.group(0)
+                    break
+            except Exception:
+                pass
+    print(f"Export version: {export_name}")
 
     def member(key):
         for low, orig in names.items():
