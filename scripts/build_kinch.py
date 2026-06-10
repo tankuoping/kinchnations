@@ -2,7 +2,7 @@
 """
 Kinch Nation data builder.
 
-Downloads the WCA TSV export, extracts national-best single/average per
+Downloads the WCA TSV export (v2), extracts national-best single/average per
 (country, event, gender bucket), and writes a compact data/kinch.json.
 
 Kinch scoring itself is done client-side (so region/gender re-scoring is
@@ -12,13 +12,14 @@ import csv
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 import urllib.request
 import zipfile
 from datetime import datetime, timezone
 
-EXPORT_URL = "https://www.worldcubeassociation.org/export/results/WCA_export.tsv.zip"
+EXPORT_API = "https://www.worldcubeassociation.org/api/v0/export/public"
 OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "kinch.json")
 
 EVENTS = [
@@ -40,21 +41,32 @@ def gender_bucket(g):
     return "u"
 
 
+UA = {"User-Agent": "KinchNation/1.0 (github.com/tankuoping/kinchnations)"}
+
+
 def download_export(dest):
-    req = urllib.request.Request(
-        EXPORT_URL,
-        headers={"User-Agent": "KinchNation/1.0 (github.com/tankuoping/kinchnations)"},
-    )
-    final_url = EXPORT_URL
+    # Export v2: ask the API for the current TSV download URL
+    req = urllib.request.Request(EXPORT_API, headers=UA)
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        meta = json.load(resp)
+    tsv_url = meta["tsv_url"]
+    req = urllib.request.Request(tsv_url, headers=UA)
     with urllib.request.urlopen(req, timeout=600) as resp:
-        final_url = resp.geturl()
         with open(dest, "wb") as f:
             while True:
                 chunk = resp.read(1 << 20)
                 if not chunk:
                     break
                 f.write(chunk)
-    return final_url
+    return tsv_url
+
+
+def col(idx, *names):
+    # v2 renamed columns to snake_case; accept both old and new names
+    for n in names:
+        if n in idx:
+            return idx[n]
+    raise KeyError(f"none of {names} in columns {list(idx)}")
 
 
 def read_tsv(zf, name):
@@ -72,52 +84,44 @@ def main():
     tmp.close()
     print("Downloading WCA export...")
     final_url = download_export(tmp.name)
-    export_name = os.path.basename(final_url.split("?")[0]) or "WCA_export.tsv.zip"
+    export_name = os.path.basename(final_url.split("?")[0]) or "WCA_export"
+    export_name = re.sub(r"\.(tsv|sql)\.zip$", "", export_name)
     size_mb = os.path.getsize(tmp.name) / 1e6
     print(f"Downloaded {export_name} ({size_mb:.1f} MB)")
 
     zf = zipfile.ZipFile(tmp.name)
     names = {n.lower(): n for n in zf.namelist()}
-
-    # Versioned export name lives inside the zip's README, not in the URL
-    import re
-    for low, orig in names.items():
-        if "readme" in low or "metadata" in low:
-            try:
-                text = zf.read(orig).decode("utf-8", "replace")
-                m = re.search(r"WCA_export\d+_\d+\w*", text)
-                if m:
-                    export_name = m.group(0)
-                    break
-            except Exception:
-                pass
     print(f"Export version: {export_name}")
 
     def member(key):
         for low, orig in names.items():
-            if key.lower() in low:
+            if key.lower() in low and low.endswith(".tsv"):
                 return orig
         raise KeyError(f"{key} not found in export zip: {zf.namelist()[:10]}")
 
     # Countries
     countries = {}
-    for row, idx in read_tsv(zf, member("Countries.tsv")):
-        cid = row[idx["id"]]
+    for row, idx in read_tsv(zf, member("countries")):
+        cid = row[col(idx, "id")]
         countries[cid] = {
-            "name": row[idx["name"]],
-            "cont": row[idx["continentId"]].lstrip("_"),
-            "iso2": row[idx["iso2"]],
+            "name": row[col(idx, "name")],
+            "cont": row[col(idx, "continent_id", "continentId")].lstrip("_"),
+            "iso2": row[col(idx, "iso2")],
         }
     print(f"Countries: {len(countries)}")
 
-    # Persons -> (country, gender bucket). subid 1 only.
+    # Persons -> (country, gender bucket). sub_id 1 only.
     persons = {}
-    for row, idx in read_tsv(zf, member("Persons.tsv")):
-        if idx.get("subid") is not None and row[idx["subid"]] not in ("1", ""):
+    for row, idx in read_tsv(zf, member("persons")):
+        sub = None
+        for k in ("sub_id", "subid"):
+            if k in idx:
+                sub = row[idx[k]]
+        if sub is not None and sub not in ("1", ""):
             continue
-        persons[row[idx["id"]]] = (
-            row[idx["countryId"]],
-            gender_bucket(row[idx["gender"]]),
+        persons[row[col(idx, "wca_id", "id")]] = (
+            row[col(idx, "country_id", "countryId")],
+            gender_bucket(row[col(idx, "gender")]),
         )
     print(f"Persons: {len(persons)}")
 
@@ -134,17 +138,17 @@ def main():
     def ingest(member_name, kind):
         count = 0
         for row, idx in read_tsv(zf, member(member_name)):
-            event = row[idx["eventId"]]
+            event = row[col(idx, "event_id", "eventId")]
             if event not in EVENT_SET:
                 continue
-            pid = row[idx["personId"]]
+            pid = row[col(idx, "person_id", "personId")]
             p = persons.get(pid)
             if not p:
                 continue
             country, bucket = p
             if country not in countries:
                 continue
-            best = int(row[idx["best"]])
+            best = int(row[col(idx, "best")])
             if best <= 0:
                 continue
             update(country, event, "a", kind, best)
@@ -152,8 +156,8 @@ def main():
             count += 1
         print(f"{member_name}: {count} rows used")
 
-    ingest("RanksSingle.tsv", "s")
-    ingest("RanksAverage.tsv", "m")
+    ingest("ranks_single", "s")
+    ingest("ranks_average", "m")
 
     out_countries = []
     for cid, meta in sorted(countries.items()):
