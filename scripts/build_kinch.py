@@ -52,13 +52,14 @@ def download_export(dest):
     tsv_url = meta["tsv_url"]
     req = urllib.request.Request(tsv_url, headers=UA)
     with urllib.request.urlopen(req, timeout=600) as resp:
+        final_url = resp.geturl()
         with open(dest, "wb") as f:
             while True:
                 chunk = resp.read(1 << 20)
                 if not chunk:
                     break
                 f.write(chunk)
-    return tsv_url
+    return final_url, meta.get("export_date", "")
 
 
 def col(idx, *names):
@@ -83,9 +84,11 @@ def main():
     tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
     tmp.close()
     print("Downloading WCA export...")
-    final_url = download_export(tmp.name)
-    export_name = os.path.basename(final_url.split("?")[0]) or "WCA_export"
+    final_url, export_date = download_export(tmp.name)
+    export_name = os.path.basename(final_url.split("?")[0]) or ""
     export_name = re.sub(r"\.(tsv|sql)\.zip$", "", export_name)
+    if not export_name.startswith("WCA_export"):
+        export_name = "WCA export " + (export_date[:10] or "?")
     size_mb = os.path.getsize(tmp.name) / 1e6
     print(f"Downloaded {export_name} ({size_mb:.1f} MB)")
 
