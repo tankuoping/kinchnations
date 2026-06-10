@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kinch Nation — Country KinchRanks</title>
+<meta name="description" content="KinchRanks by country, rebuilt from the WCA results export twice daily.">
+<style>
+  :root{
+    --ink:#16201d; --muted:#5d6b66; --faint:#93a09b;
+    --bg:#fafbf9; --panel:#ffffff; --line:#e3e8e5;
+    --green:#0f6e56; --green-deep:#08503f; --gold:#b07d10;
+    --mono:"SF Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--ink); font:15px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;}
+  a{color:var(--green);}
+
+  header{max-width:1280px; margin:0 auto; padding:28px 20px 14px; display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px;}
+  .brand{display:flex; align-items:center; gap:12px;}
+  .cube{width:40px; height:40px; display:grid; grid-template:repeat(3,1fr)/repeat(3,1fr); gap:2px; background:var(--ink); padding:3px; border-radius:8px; flex:none;}
+  .cube i{border-radius:2px; background:#fff;}
+  .cube i:nth-child(1){background:#0f6e56}.cube i:nth-child(3){background:#d85a30}
+  .cube i:nth-child(5){background:#b07d10}.cube i:nth-child(7){background:#185fa5}
+  .cube i:nth-child(9){background:#993556}
+  h1{font-size:26px; letter-spacing:.04em; font-weight:800;}
+  h1 span{color:var(--green);}
+  .tag{color:var(--muted); font-size:13px;}
+  .meta{margin-left:auto; text-align:right; font-size:12px; color:var(--muted);}
+  .meta b{color:var(--ink); font-weight:600;}
+
+  .controls{max-width:1280px; margin:0 auto; padding:6px 20px 14px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;}
+  select,input[type=search]{font:inherit; font-size:14px; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--ink);}
+  input[type=search]{width:220px;}
+  select:focus,input:focus{outline:2px solid var(--green); outline-offset:1px;}
+  label{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em;}
+  .ctl{display:flex; align-items:center; gap:6px;}
+  .count{font-size:13px; color:var(--muted); margin-left:auto;}
+
+  .wrap{max-width:1280px; margin:0 auto 40px; padding:0 20px;}
+  .tablebox{background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:auto; max-height:78vh;}
+  table{border-collapse:separate; border-spacing:0; width:100%; font-size:13px;}
+  thead th{position:sticky; top:0; z-index:3; background:var(--panel); border-bottom:1.5px solid var(--ink); padding:9px 8px; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); white-space:nowrap; cursor:pointer; user-select:none; text-align:right;}
+  thead th:hover{color:var(--ink);}
+  thead th.l{text-align:left;}
+  thead th.sorted{color:var(--green-deep);}
+  tbody td{padding:7px 8px; border-bottom:1px solid var(--line); white-space:nowrap; text-align:right; font-family:var(--mono); font-size:12.5px;}
+  tbody tr:hover td{filter:brightness(.96);}
+  td.rank{color:var(--muted); width:44px;}
+  td.country, th.country{position:sticky; left:0; z-index:2; background:var(--panel); text-align:left; font-family:inherit; font-size:13.5px; font-weight:550; border-right:1px solid var(--line); max-width:230px; overflow:hidden; text-overflow:ellipsis;}
+  thead th.country{z-index:4;}
+  td.country .fl{margin-right:7px;}
+  td.overall{font-weight:700; color:var(--green-deep); background:#eef6f2;}
+  td.perfect{color:var(--gold); font-weight:700;}
+  td.zero{color:var(--faint);}
+
+  footer{max-width:1280px; margin:0 auto; padding:0 20px 50px; font-size:12.5px; color:var(--muted); line-height:1.8;}
+  .err{padding:40px; text-align:center; color:var(--muted);}
+  @media (max-width:700px){ .meta{display:none;} input[type=search]{width:140px;} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="cube" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div>
+      <h1>KINCH <span>NATION</span></h1>
+      <div class="tag">Country KinchRanks · every national best vs the world's best, across all 17 events</div>
+    </div>
+  </div>
+  <div class="meta" id="meta"></div>
+</header>
+
+<div class="controls">
+  <div class="ctl"><label for="region">Region</label>
+    <select id="region">
+      <option value="">World</option>
+      <option>Africa</option><option>Asia</option><option>Europe</option>
+      <option>North America</option><option>Oceania</option><option>South America</option>
+    </select>
+  </div>
+  <div class="ctl"><label for="gender">Gender</label>
+    <select id="gender">
+      <option value="a">All</option>
+      <option value="m">Male</option>
+      <option value="f">Female</option>
+      <option value="o">Other</option>
+      <option value="u">Unknown</option>
+    </select>
+  </div>
+  <div class="ctl"><input id="q" type="search" placeholder="Search country…" aria-label="Search country"></div>
+  <div class="count" id="count"></div>
+</div>
+
+<div class="wrap">
+  <div class="tablebox"><table id="t">
+    <thead></thead><tbody><tr><td class="err">Loading…</td></tr></tbody>
+  </table></div>
+</div>
+
+<footer>
+  <div>Scoring follows <a href="https://www.speedsolving.com/threads/kinchranks-a-new-rating-system.54508/" target="_blank" rel="noopener">KinchRanks</a>:
+  per event, 100 × (region's best NR ÷ this country's NR). 3×3 blindfolded and FMC take the better of single or mean; 4BLD/5BLD use single; multi-blind uses points + time remaining. Overall is the plain average of all 17 events.</div>
+  <div>Data: <a href="https://www.worldcubeassociation.org/export/results" target="_blank" rel="noopener">WCA results export</a>, refreshed automatically at 7:00 am and 7:00 pm SGT. Unofficial — not affiliated with the WCA.</div>
+</footer>
+
+<script>
+const EVENTS = ["333","222","444","555","666","777","333bf","333fm","333oh","clock","minx","pyram","skewb","sq1","444bf","555bf","333mbf"];
+const LABEL = {333:"3x3",222:"2x2",444:"4x4",555:"5x5",666:"6x6",777:"7x7","333bf":"3BLD","333fm":"FMC","333oh":"OH",clock:"Clock",minx:"Mega",pyram:"Pyra",skewb:"Skewb",sq1:"Sq-1","444bf":"4BLD","555bf":"5BLD","333mbf":"MBLD"};
+const MODE = {"333bf":"both","333fm":"both","444bf":"single","555bf":"single","333mbf":"mbld"};
+
+let DATA=null, sortKey="overall", sortDir=-1;
+
+function flag(iso2){
+  if(!iso2||iso2.length!==2||/[^A-Za-z]/.test(iso2)) return "";
+  return String.fromCodePoint(...[...iso2.toUpperCase()].map(c=>0x1F1E6+c.charCodeAt(0)-65));
+}
+
+function mbldScore(v){
+  if(!v||v<=0) return 0;
+  let points, time;
+  if(v>=1e9){ // old format 1SSAATTTTT
+    const ss=Math.floor(v/1e7)%100, aa=Math.floor(v/1e5)%100, tt=v%1e5;
+    const solved=99-ss, attempted=aa;
+    points=solved-(attempted-solved); time=tt;
+  } else {   // new format DDTTTTTMM
+    const dd=Math.floor(v/1e7), tt=Math.floor(v/100)%1e5, mm=v%100;
+    points=99-dd; time=(tt===99999?3600:tt); void mm;
+  }
+  return points + (3600-time)/3600;
+}
+
+function val(c,ev,g,i){ const e=c.e[ev]; if(!e) return 0; const b=e[g]; return b? (b[i]||0):0; }
+
+function compute(region,g){
+  const subset = DATA.countries.filter(c=>!region||c.cont===region);
+  // best per event per basis over subset
+  const best={};
+  for(const ev of EVENTS){
+    const mode=MODE[ev]||"avg";
+    let bs=0,ba=0,bm=0;
+    for(const c of subset){
+      const s=val(c,ev,g,0), a=val(c,ev,g,1);
+      if(mode==="mbld"){ const sc=mbldScore(s); if(sc>bm) bm=sc; continue; }
+      if((mode==="single"||mode==="both") && s>0 && (bs===0||s<bs)) bs=s;
+      if((mode==="avg"||mode==="both") && a>0 && (ba===0||a<ba)) ba=a;
+    }
+    best[ev]={bs,ba,bm};
+  }
+  const rows = subset.map(c=>{
+    const scores={}; let sum=0;
+    for(const ev of EVENTS){
+      const mode=MODE[ev]||"avg", b=best[ev];
+      const s=val(c,ev,g,0), a=val(c,ev,g,1);
+      let sc=0;
+      if(mode==="avg"){ if(a>0&&b.ba>0) sc=100*b.ba/a; }
+      else if(mode==="single"){ if(s>0&&b.bs>0) sc=100*b.bs/s; }
+      else if(mode==="both"){
+        if(s>0&&b.bs>0) sc=Math.max(sc,100*b.bs/s);
+        if(a>0&&b.ba>0) sc=Math.max(sc,100*b.ba/a);
+      }
+      else { const m=mbldScore(s); if(m>0&&b.bm>0) sc=100*m/b.bm; }
+      scores[ev]=sc; sum+=sc;
+    }
+    return {c, scores, overall:sum/EVENTS.length};
+  }).filter(r=>r.overall>0);
+  return rows;
+}
+
+function heat(sc){
+  if(sc<=0) return "";
+  const a=Math.pow(sc/100,2.2)*0.34;
+  return `background:rgba(15,110,86,${a.toFixed(3)})`;
+}
+
+function render(){
+  if(!DATA) return;
+  const region=document.getElementById("region").value;
+  const g=document.getElementById("gender").value;
+  const q=document.getElementById("q").value.trim().toLowerCase();
+
+  let rows=compute(region,g);
+  rows.sort((x,y)=>{
+    let d;
+    if(sortKey==="overall") d=x.overall-y.overall;
+    else if(sortKey==="country") d=x.c.name.localeCompare(y.c.name)*-1;
+    else d=(x.scores[sortKey]||0)-(y.scores[sortKey]||0);
+    return d*sortDir || y.overall-x.overall;
+  });
+
+  // ranks by overall (ties share rank)
+  const byOverall=[...rows].sort((a,b)=>b.overall-a.overall);
+  let prev=null, prevRank=0;
+  byOverall.forEach((r,i)=>{
+    const key=r.overall.toFixed(2);
+    r.rank = (key===prev)? prevRank : i+1;
+    prev=key; prevRank=r.rank;
+  });
+
+  if(q) rows=rows.filter(r=>r.c.name.toLowerCase().includes(q)||r.c.iso2.toLowerCase()===q);
+
+  const thead=document.querySelector("#t thead");
+  thead.innerHTML="<tr>"+
+    `<th class="l">#</th>`+
+    `<th class="l country${sortKey==='country'?' sorted':''}" data-k="country">Country</th>`+
+    `<th class="${sortKey==='overall'?'sorted':''}" data-k="overall">Overall</th>`+
+    EVENTS.map(ev=>`<th class="${sortKey===ev?'sorted':''}" data-k="${ev}">${LABEL[ev]}</th>`).join("")+"</tr>";
+  thead.querySelectorAll("th[data-k]").forEach(th=>th.onclick=()=>{
+    const k=th.dataset.k;
+    if(sortKey===k) sortDir*=-1; else {sortKey=k; sortDir=-1;}
+    render();
+  });
+
+  const tbody=document.querySelector("#t tbody");
+  if(!rows.length){ tbody.innerHTML=`<tr><td class="err" colspan="${EVENTS.length+3}">No countries match.</td></tr>`; }
+  else tbody.innerHTML=rows.map(r=>
+    `<tr><td class="rank">${r.rank}</td>`+
+    `<td class="country"><span class="fl">${flag(r.c.iso2)}</span>${r.c.name}</td>`+
+    `<td class="overall">${r.overall.toFixed(2)}</td>`+
+    EVENTS.map(ev=>{
+      const sc=r.scores[ev];
+      const cls=sc>=99.995?"perfect":(sc<=0?"zero":"");
+      return `<td class="${cls}" style="${heat(sc)}">${sc.toFixed(2)}</td>`;
+    }).join("")+"</tr>"
+  ).join("");
+
+  document.getElementById("count").textContent=`${rows.length} countries`;
+}
+
+async function init(){
+  try{
+    const res=await fetch("data/kinch.json",{cache:"no-store"});
+    DATA=await res.json();
+    const d=new Date(DATA.updated);
+    const sg=d.toLocaleString("en-SG",{timeZone:"Asia/Singapore",day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true});
+    document.getElementById("meta").innerHTML=
+      `Updated <b>${sg} SGT</b>${DATA.sample?" · <b style='color:#b07d10'>sample data</b>":""}<br>${DATA.export||""} · next refresh 7 am / 7 pm SGT`;
+    render();
+  }catch(e){
+    document.querySelector("#t tbody").innerHTML=`<td class="err">Couldn't load data/kinch.json — run the "Update Kinch data" workflow once.</td>`;
+  }
+}
+["region","gender"].forEach(id=>document.getElementById(id).onchange=render);
+document.getElementById("q").oninput=render;
+init();
+</script>
+</body>
+</html>
